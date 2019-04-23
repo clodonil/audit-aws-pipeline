@@ -4,14 +4,14 @@
 API:
 
 ```
-/api/v1/pipelines        # Retorna o id, status atual e número de execução da pipeline
+GET /api/v1/pipelines        # Retorna o id, status atual e número de execução da pipeline
 
     Saída:
        { 
            id: xxxx, status: Green, NumExec: 10 
        }
 
-/api/v1/pipeline/id      # Retorna as informação completa de um pipeline
+GET /api/v1/pipeline/id      # Retorna as informação completa de um pipeline
 
     Saída:
 {
@@ -54,6 +54,6 @@ API:
   }
 }
 
-/api/v1/metrics
-/api/v1/status
+GET /api/v1/metrics
+GET /api/v1/status
 ```
