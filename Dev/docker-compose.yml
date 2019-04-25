@@ -1,0 +1,15 @@
+version: '3'
+services:
+  prometheus:
+    image: jenkins/jenkins:lts
+    user: root
+    ports:
+      - 8080:8080
+    links:
+      - grafana
+  
+  grafana:
+    image: gitlab/gitlab-ce
+    ports:
+      - 80:80
+
