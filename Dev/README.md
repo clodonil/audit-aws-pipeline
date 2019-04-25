@@ -10,6 +10,11 @@ aws dynamodb list-tables --endpoint-url http://localhost:8000
 }
 ```
 
+Criando uma tabela
+
+```
+aws dynamodb
+
 # Docker Image
 
 - [AWS-lambda](https://github.com/lambci/docker-lambda)
