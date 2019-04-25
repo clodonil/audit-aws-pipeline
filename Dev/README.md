@@ -1,6 +1,15 @@
 # Desenvolvimento Local
 
 
+# Dynamodb-local
+
+```
+aws dynamodb list-tables --endpoint-url http://localhost:8000
+{
+    "TableNames": []
+}
+```
+
 # Docker Image
 
 - [AWS-lambda](https://github.com/lambci/docker-lambda)
