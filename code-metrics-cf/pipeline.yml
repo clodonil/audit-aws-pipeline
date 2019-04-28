@@ -1,0 +1,632 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Exemplo de Pipeline
+Parameters:
+  projetoName:
+    Description: A name for pipeline
+    Type: String
+    Default: appdocker
+  RepoName:
+    Description: O Repositorio de codigo
+    Type: String
+    Default: docker-secret-clodo
+  ClusterDev:
+    Description: URI do Registry de Dev
+    Type: String
+    Default: 325847872862.dkr.ecr.us-east-1.amazonaws.com/repo-demo
+  ClusterHomolog:
+    Description: URI do Registry de Homologacao
+    Type: String
+    Default: 325847872862.dkr.ecr.us-east-1.amazonaws.com/repo-demo
+  ClusterProd:
+    Description: URI do Registry de Producao
+    Type: String
+    Default: 325847872862.dkr.ecr.us-east-1.amazonaws.com/repo-demo
+Resources:
+  CodePipelineRole:
+     Type: "AWS::IAM::Role"
+     Properties:
+       RoleName:
+         Fn::Sub: CodePipelineRole-${AWS::StackName}
+       AssumeRolePolicyDocument:
+         Version: "2012-10-17"
+         Statement:
+           -
+             Effect: "Allow"
+             Principal:
+               Service:
+                 - "codepipeline.amazonaws.com"
+             Action:
+               - "sts:AssumeRole"
+       Path: /
+       Policies:
+         -
+           PolicyName: "CodePipelineAccessPolicy"
+           PolicyDocument:
+             Version: "2012-10-17"
+             Statement:
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "s3:DeleteObject"
+                   - "s3:GetObjectVersion"
+                   - "s3:GetObject"
+                   - "s3:ListBucket"
+                   - "s3:PutObject"
+                   - "s3:GetBucketPolicy"
+                 Resource:
+                   - Fn::Sub: arn:aws:s3:::${ArtifactStoreBucket}
+                   - Fn::Sub: arn:aws:s3:::${ArtifactStoreBucket}/*
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "codecommit:ListBranches"
+                   - "codecommit:ListRepositories"
+                   - "codecommit:BatchGetRepositories"
+                   - "codecommit:Get*"
+                   - "codecommit:GitPull"
+                   - "codecommit:UploadArchive"
+                 Resource:
+                   - Fn::Sub: arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${RepoName}
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "codebuild:StartBuild"
+                   - "codebuild:BatchGetBuilds"
+                 Resource:
+                   - Fn::Sub: arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/BuildProject-${AWS::StackName}
+                   - Fn::Sub: arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:build/BuildProject-${AWS::StackName}:*
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "iam:PassRole"
+                 Resource:
+                   - Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/CloudFormationRole-${AWS::StackName}
+               -
+                 Effect: Allow
+                 Action:
+                   - ecs:DescribeServices
+                   - ecs:DescribeTaskDefinition
+                   - ecs:DescribeTasks
+                   - ecs:ListTasks
+                   - ecs:RegisterTaskDefinition
+                   - ecs:UpdateService
+                   - codebuild:StartBuild
+                   - codebuild:BatchGetBuilds
+                   - iam:PassRole
+                 Resource: "*"
+               -
+                 Effect: Allow
+                 Action:
+                   - codedeploy:CreateDeployment
+                   - codedeploy:GetApplicationRevision
+                   - codedeploy:GetDeployment
+                   - codedeploy:GetDeploymentConfig
+                   - codedeploy:RegisterApplicationRevision
+                 Resource: "*"
+               -
+                 Effect: Allow
+                 Action:
+                   - cloudformation:CreateStack
+                   - cloudformation:DeleteStack
+                   - cloudformation:DescribeStacks
+                   - cloudformation:UpdateStack
+                   - cloudformation:CreateChangeSet
+                   - cloudformation:DeleteChangeSet
+                   - cloudformation:DescribeChangeSet
+                   - cloudformation:ExecuteChangeSet
+                   - cloudformation:SetStackPolicy
+                   - cloudformation:ValidateTemplate
+                   - iam:PassRole
+                 Resource: "*"
+
+
+  CodeBuildRole:
+     Type: "AWS::IAM::Role"
+     Properties:
+       RoleName:
+         Fn::Sub: CodeBuildRole-${AWS::StackName}
+       AssumeRolePolicyDocument:
+         Version: "2012-10-17"
+         Statement:
+           -
+             Effect: "Allow"
+             Principal:
+               Service:
+                 - "codebuild.amazonaws.com"
+             Action:
+               - "sts:AssumeRole"
+       Path: /service-role/
+       Policies:
+         -
+           PolicyName: "CodeBuildAccessPolicy"
+           PolicyDocument:
+             Version: "2012-10-17"
+             Statement:
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "cloudformation:Get*"
+                   - "cloudformation:Describe*"
+                   - "cloudformation:List*"
+                 Resource:
+                   - Fn::Sub: arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/Test-${AWS::StackName}*
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "codecommit:ListBranches"
+                   - "codecommit:ListRepositories"
+                   - "codecommit:BatchGetRepositories"
+                   - "codecommit:Get*"
+                   - "codecommit:GitPull"
+                 Resource:
+                   - Fn::Sub: arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${RepoName}
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "ec2:Describe*"
+                   - "cloudformation:ValidateTemplate"
+                   - "elasticloadbalancing:Describe*"
+                   - "autoscaling:Describe*"
+                   - "iam:Get*"
+                   - "iam:List*"
+                   - "logs:Describe*"
+                   - "logs:Get*"
+                   - "tag:Get*"
+                 Effect: "Allow"
+                 Action:
+                   - ecr:GetAuthorizationToken
+                   - ecr:BatchCheckLayerAvailability
+                   - ecr:GetDownloadUrlForLayer
+                   - ecr:GetRepositoryPolicy
+                   - ecr:DescribeRepositories
+                   - ecr:ListImages
+                   - ecr:BatchGetImage
+                 Resource:
+                   - "*"
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "logs:CreateLogGroup"
+                   - "logs:CreateLogStream"
+                   - "logs:PutLogEvents"
+                 Resource:
+                   - Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*
+               -
+                 Effect: "Allow"
+                 Action:
+                   - "s3:PutObject"
+                   - "s3:GetObject"
+                   - "s3:GetObjectVersion"
+                   - "s3:ListBucket"
+                 Resource:
+                   - Fn::Sub: arn:aws:s3:::${ArtifactStoreBucket}
+                   - Fn::Sub: arn:aws:s3:::${ArtifactStoreBucket}/*
+
+  ECRDevelopment:
+    Type: AWS::ECR::Repository
+    Properties:
+       RepositoryName:
+          Fn::Sub: ${projetoName}-development
+       RepositoryPolicyText:
+         Version: "2012-10-17"
+         Statement:
+           -
+             Sid: AllowPushPull
+             Effect: Allow
+             Principal:
+               AWS:
+                  - Fn::GetAtt: [ CodeBuildRole, Arn ]
+             Action:
+               - "ecr:GetDownloadUrlForLayer"
+               - "ecr:BatchGetImage"
+               - "ecr:BatchCheckLayerAvailability"
+               - "ecr:PutImage"
+               - "ecr:InitiateLayerUpload"
+               - "ecr:UploadLayerPart"
+               - "ecr:CompleteLayerUpload"
+
+  ECRHomolog:
+    Type: AWS::ECR::Repository
+    Properties:
+       RepositoryName:
+          Fn::Sub: ${projetoName}-homolog
+       RepositoryPolicyText:
+         Version: "2012-10-17"
+         Statement:
+           -
+             Sid: AllowPushPull
+             Effect: Allow
+             Principal:
+               AWS:
+                  - Fn::GetAtt: [ CodeBuildRole, Arn ]
+             Action:
+               - "ecr:GetDownloadUrlForLayer"
+               - "ecr:BatchGetImage"
+               - "ecr:BatchCheckLayerAvailability"
+               - "ecr:PutImage"
+               - "ecr:InitiateLayerUpload"
+               - "ecr:UploadLayerPart"
+               - "ecr:CompleteLayerUpload"
+
+  ECRProduction:
+    Type: AWS::ECR::Repository
+    Properties:
+       RepositoryName:
+          Fn::Sub: ${projetoName}-production
+       RepositoryPolicyText:
+         Version: "2012-10-17"
+         Statement:
+           -
+             Sid: AllowPushPull
+             Effect: Allow
+             Principal:
+               AWS:
+                  - Fn::GetAtt: [ CodeBuildRole, Arn ]
+             Action:
+               - "ecr:GetDownloadUrlForLayer"
+               - "ecr:BatchGetImage"
+               - "ecr:BatchCheckLayerAvailability"
+               - "ecr:PutImage"
+               - "ecr:InitiateLayerUpload"
+               - "ecr:UploadLayerPart"
+               - "ecr:CompleteLayerUpload"
+
+  ArtifactStoreBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+
+  TestUnit:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:
+        Fn::Sub: TestUnit-${AWS::StackName}
+      Description: Rodando o test unit
+      ServiceRole:
+         Fn::GetAtt: [CodeBuildRole, Arn ]
+      Artifacts:
+        Type: S3
+        Location:
+           Ref: ArtifactStoreBucket
+        Name:
+          Fn::Sub: BuildProject-${AWS::StackName}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/python:3.6.5-1.3.1
+        PrivilegedMode: true
+      Source:
+          Type: CODECOMMIT
+          Location:
+            Fn::Sub: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/${RepoName}
+
+          BuildSpec: !Sub |
+            version: 0.2
+            phases:
+              pre_build:
+                commands:
+                    - echo Dependencia
+                    - pip install --upgrade pip
+                    - pip install -r requirements
+                    - export PORT=8080
+                    - export MSG=8080
+                    - export db_url=8080
+                    - export db_user='xxx'
+                    - export db_passwd='xxx'
+                    - export DEBUG="False"
+                    - export ENVIRONMENT='development'
+              build:
+                commands:
+                   - echo Rodando o test Unit
+                   - find . -name "*.py" -exec pylint '{}' \;
+                   - python -m unittest test.py
+            artifacts:
+               files:
+                   - '**/*'
+               discard-paths: no
+
+  BuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:
+        Fn::Sub: BuildProject-${AWS::StackName}
+      Description: Gerando imagem Docker
+      ServiceRole:
+         Fn::GetAtt: [CodeBuildRole, Arn ]
+      Artifacts:
+        Type: S3
+        Location:
+           Ref: ArtifactStoreBucket
+        Name:
+          Fn::Sub: BuildProject-${AWS::StackName}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/docker:18.09.0-1.7.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: REPOSITORY
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${projetoName}-development"
+          - Name: "AWS_KEY"
+            Value: AKIAICKXR3IDCKB4WWPQ
+          - Name: AWS_SECRET
+            Value: OTEVTXxdKTYYNkAlpeQcrWMKkFid
+      Source:
+        Location:
+          Fn::Sub: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/${RepoName}
+        Type: CODECOMMIT
+
+  EvoluirToHomol:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:
+        Fn::Sub: EvoluirDevHomol-${AWS::StackName}
+      Description: Evoluindo imagem do ECR de Development para ECR Homologacao
+      ServiceRole:
+         Fn::GetAtt: [CodeBuildRole, Arn ]
+      Artifacts:
+        Type: S3
+        Location:
+           Ref: ArtifactStoreBucket
+        Name:
+          Fn::Sub: BuildProject-${AWS::StackName}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/docker:18.09.0-1.7.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: REPOSITORY
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${projetoName}-development"
+          - Name: REPHOMOLOG
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${projetoName}-homolog"
+      Source:
+          Type: CODECOMMIT
+          Location:
+            Fn::Sub: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/${RepoName}
+
+          BuildSpec: !Sub |
+           version: 0.2
+           phases:
+             pre_build:
+                commands:
+                   - echo Logging in to Amazon ECR...
+                   - $(aws ecr get-login --no-include-email --region us-east-1)
+             build:
+                commands:
+                   - echo Build started on `date`
+                   - echo Building the Docker image...
+                   - echo "docker pull $REPOSITORY:latest"
+                   - docker pull $REPOSITORY:latest
+                   - docker tag $REPOSITORY:latest $REPHOMOLOG:latest
+             post_build:
+                commands:
+                   - echo Pushing the Docker images...
+                   - docker push $REPHOMOLOG:latest
+                   - printf '[{"name":"appnew","imageUri":"%s"}]' $REPHOMOLOG:latest > build.json
+                   - cat build.json
+           artifacts:
+                files:
+                   - build.json
+                discard-paths: yes
+
+  EvoluirToProd:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:
+        Fn::Sub: Evoluirproduction-${AWS::StackName}
+      Description: Evoluindo imagem do ECR de Homologacao para Producao
+      ServiceRole:
+         Fn::GetAtt: [CodeBuildRole, Arn ]
+      Artifacts:
+        Type: S3
+        Location:
+           Ref: ArtifactStoreBucket
+        Name:
+          Fn::Sub: BuildProject-${AWS::StackName}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/docker:18.09.0-1.7.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: REPOSITORY
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${projetoName}-homolog"
+          - Name: REPHOMOLOG
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${projetoName}-production"
+      Source:
+          Type: CODECOMMIT
+          Location:
+            Fn::Sub: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/${RepoName}
+
+          BuildSpec: !Sub |
+           version: 0.2
+           phases:
+             pre_build:
+                commands:
+                   - echo Logging in to Amazon ECR...
+                   - $(aws ecr get-login --no-include-email --region us-east-1)
+             build:
+                commands:
+                   - echo Build started on `date`
+                   - echo Building the Docker image...
+                   - echo "docker pull $REPOSITORY:latest"
+                   - docker pull $REPOSITORY:latest
+                   - docker tag $REPOSITORY:latest $REPHOMOLOG:latest
+             post_build:
+                commands:
+                   - echo Pushing the Docker images...
+                   - docker push $REPHOMOLOG:latest
+                   - printf '[{"name":"appnew","imageUri":"%s"}]' $REPHOMOLOG:latest > build.json
+                   - cat build.json
+           artifacts:
+                files:
+                   - build.json
+                discard-paths: yes
+
+
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name:
+         Fn::Sub: Pipeline-${AWS::StackName}
+      RoleArn:
+             Fn::GetAtt: [ CodePipelineRole, Arn ]
+      ArtifactStore:
+             Type: S3
+             Location: !Ref ArtifactStoreBucket
+      Stages:
+        - Name: SourceCode
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                BranchName: master
+                RepositoryName: !Ref 'RepoName'
+              RunOrder: 1
+        -
+          Name: TestUnit
+          Actions:
+            -
+              Name: CodeBuild
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: TestOutput
+              Configuration:
+                ProjectName:
+                  Ref: TestUnit
+              RunOrder: 1
+        -
+          Name: BuildImage
+          Actions:
+            -
+              Name: CodeBuild
+              InputArtifacts:
+                - Name: TestOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: BuildOutput
+              Configuration:
+                ProjectName:
+                  Ref: BuildProject
+              RunOrder: 1
+
+        - Name: Deploy-Development
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ECS
+                Version: 1
+              InputArtifacts:
+                - Name:  BuildOutput
+              Configuration:
+                ClusterName: 'development'
+                ServiceName: 'srv-development'
+                FileName: 'build.json'
+
+        - Name: AvancaHomolog
+          Actions:
+            - Name: Homologar
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Version: 1
+                Provider: Manual
+              Configuration:
+                 CustomData: "Continua com essa imagem para Homologacao?"
+              RunOrder: 2
+        - Name: To-Homolog
+          Actions:
+            -
+              Name: CodeBuild
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildHomolOutput
+              Configuration:
+                ProjectName:
+                  Ref: EvoluirToHomol
+              RunOrder: 2
+        - Name: Deploy-Homolog
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ECS
+                Version: 1
+              InputArtifacts:
+                - Name:  BuildHomolOutput
+              Configuration:
+                ClusterName: 'homolog'
+                ServiceName: 'srv-homolog'
+                FileName: 'build.json'
+
+        - Name: AvancaProd
+          Actions:
+            - Name: Producao
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Version: 1
+                Provider: Manual
+              Configuration:
+                 CustomData: "Continua com essa imagem para Producao?"
+              RunOrder: 2
+        - Name: To-Production
+          Actions:
+            -
+              Name: CodeBuild
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildProdOutput
+              Configuration:
+                ProjectName:
+                  Ref: EvoluirToProd
+              RunOrder: 2
+        - Name: Deploy-Production
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ECS
+                Version: 1
+              InputArtifacts:
+                - Name:  BuildProdOutput
+              Configuration:
+                ClusterName: 'production'
+                ServiceName: 'srv-production'
+                FileName: 'build.json'
+
+

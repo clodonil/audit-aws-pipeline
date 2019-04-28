@@ -3,7 +3,7 @@ from flask_restful import reqparse, abort, Api, Resource
 from app.dynamopipeline  import status
 
 
-class Status(Resource):
+class Healthcheck(Resource):
     def get(self):
         '''
           

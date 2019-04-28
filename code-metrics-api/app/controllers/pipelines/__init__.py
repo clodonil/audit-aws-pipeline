@@ -30,7 +30,6 @@ class Pipeline(Resource):
         '''
         args = parser.parse_args()
         id   = args['id']
-
         (retorno, msg) = getpipeline(id)
         if retorno:
            msg =  {"status": 'success', 'message' : msg}
