@@ -9,3 +9,4 @@ A solução do Code-Metrics envolve os seguintes recursos:
 
 O desenho da solução basicamente é essa:
 
+![code-metrics](img/code-metrics.png)
