@@ -150,3 +150,4 @@ def status():
       msg = "Sistema Online"
       retorno = True
       return (retorno, msg)
+
