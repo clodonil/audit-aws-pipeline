@@ -7,8 +7,6 @@ services:
     command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"
     ports:
       - 9090:9090
-    links:
-      - grafana
       
   
   grafana:
@@ -26,14 +24,14 @@ services:
       - 8000:8000
 
 
-#  code-metrics:
-#    build: ../code-metrics-api/.
-#    ports:
-#       - 8080:8080
-#    depends_on:
-#      - dynamodb 
-#     links:
-#        - prometheus
-#        - dynamodb 
+  code-metrics-api:
+    build: ../code-metrics-api/.
+    ports:
+       - 8080:8080
+    depends_on:
+      - dynamodb 
+    links:
+      - prometheus
+      - dynamodb 
 
 

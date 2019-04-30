@@ -6,4 +6,4 @@ COPY . /app
 ENV enviroment local
 WORKDIR /app
 RUN pip install -r requirements
-CMD ["/bin/bash", "-c", "python run.py"]
+CMD ["./start.sh"]
