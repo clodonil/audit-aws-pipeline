@@ -1,14 +1,16 @@
-from config import DYNAMO_TABLE
 import datetime
 import boto3
+from app import app
 
 def DySearch(id='all'):
     '''
     Consulta a tabela do dynamodb
     '''
     
-    client = boto3.resource('dynamodb')
-    table = client.Table(DYNAMO_TABLE)
+    client = boto3.resource('dynamodb',region_name=app.config['REGION_NAME'], endpoint_url=app.config['ENDPOINT_URL'])
+    table = client.Table(app.config['TABLE_NAME'])
+
+
     
     if id == 'all': 
        msg   = table.scan()
@@ -263,8 +265,8 @@ def time_deploy(pipelines):
         
         #if avgTimeDeploy:
         #     segund = change_in_segund(avgTimeDeploy)
-        #     info={'provider':provider,'projeto':projeto,'app':app,'time':segund}
-        #     info_deploy.append(info)
+    info={'provider':provider,'projeto':projeto,'app':app,'time':segund}
+    info_deploy.append(info)
     return(info_deploy)
     
 def time_stages(pipelines):
