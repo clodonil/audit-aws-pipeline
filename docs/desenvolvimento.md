@@ -23,6 +23,10 @@ python3 save_pipeline_in_dynamodb.py
 ```
 
 
+```
+docker run -p 9090:9090 -e API_URL='ec2co-ecsel-1jcx7bgvhei2q-944124367.us-east-1.elb.amazonaws.com:8080rometheus:latest
+```
+
 # Docker Image
 
 - [AWS-lambda](https://github.com/lambci/docker-lambda)

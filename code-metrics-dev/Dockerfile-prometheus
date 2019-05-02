@@ -1,0 +1,8 @@
+FROM prom/prometheus
+LABEL maintainer Clodonil Trigo "clodonil@nisled.org"
+
+ADD prometheus/prometheus.yml /etc/prometheus/
+
+ENV API_URL='localhost:8080'
+
+RUN  sed -i "s/app/$API_URL/" /etc/prometheus.yml

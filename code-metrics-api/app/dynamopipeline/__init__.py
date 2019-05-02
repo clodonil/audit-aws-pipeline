@@ -7,10 +7,25 @@ def DySearch(id='all'):
     Consulta a tabela do dynamodb
     '''
     
-    client = boto3.resource('dynamodb',region_name=app.config['REGION_NAME'], endpoint_url=app.config['ENDPOINT_URL'])
+    if app.config['ENDPOINT_URL']:
+       client = boto3.resource(
+                               'dynamodb',
+                                region_name          = app.config['REGION_NAME'],
+                                endpoint_url         = app.config['ENDPOINT_URL'],
+                                aws_access_key_id    = app.config['ACCESS_ID'],
+                                aws_secret_access_key= app.config['ACCESS_KEY']
+                              )
+    
+    else:
+       client = boto3.resource(
+                               'dynamodb',
+                                region_name          = app.config['REGION_NAME'],
+                                aws_access_key_id    = app.config['ACCESS_ID'],
+                                aws_secret_access_key= app.config['ACCESS_KEY']
+                              )
+           
+
     table = client.Table(app.config['TABLE_NAME'])
-
-
     
     if id == 'all': 
        msg   = table.scan()
@@ -59,27 +74,30 @@ def AvgTime(pipeline):
     
     return str(avg)
 
+
+
 def AvgTimeStage(pipeline):
     '''
     '''
-    total = 0
-    cont  = 0
-    avg   = ""
-    stages =""
+    control_stages = {}
+
     for running in pipeline['detail']['running']:
         for run in running:
                if running[run]['status'] == 'SUCCEEDED':
-                                     
-                  cont += 1    
-                  if total != 0:
-                     total  += datetime.datetime.strptime(running[run]['finished'],'%Y-%m-%dT%H:%M:%SZ') - datetime.datetime.strptime(running[run]['start'],'%Y-%m-%dT%H:%M:%SZ')
-                  else:
-                     total  = datetime.datetime.strptime(running[run]['finished'],'%Y-%m-%dT%H:%M:%SZ') - datetime.datetime.strptime(running[run]['start'],'%Y-%m-%dT%H:%M:%SZ')
+                  for stages in running[run]['stages']:
+                      for stage in stages:
+                          time = datetime.datetime.strptime(stages[stage]['finished'],'%Y-%m-%dT%H:%M:%SZ') - datetime.datetime.strptime(stages[stage]['start'],'%Y-%m-%dT%H:%M:%SZ')   
+                          if stage in control_stages:
+                             control_stages[stage] +=time
+                          else:
+                             control_stages[stage] =  time
 
-    if cont != 0:
-       avg = total / cont
+    print(control_stages)
+
+    for control in control_stages:        
+        control_stages[control] /= len(pipeline['detail']['running'])                                  
     
-    return [stages,str(avg)]
+    return control_stages
 
 
     
@@ -241,17 +259,16 @@ def deploy_day(pipelines):
                 if start == now:
                    max += 1
         
-        if max:           
-           projeto = {'provider':provider,'projeto':projeto,'app':app,'max':max}
-           today.append(projeto)
+                 
+        projeto = {'provider':provider,'projeto':projeto,'app':app,'max':max}
+        today.append(projeto)
     return(today)
 
-def change_in_segund(hora):
+def change_in_segunds(hora):
     
-    hora,min,seg = hora.split(":")
-    print(hora, min, seg)
-    segund = (int(min)*60) + (int(hora)*120) + float(seg)
-    return segund
+    hora,min,seg = str(hora).split(":")
+    segunds = (int(min)*60) + (int(hora)*120) + int(float(seg))
+    return segunds
     
 def time_deploy(pipelines):
     info_deploy = []
@@ -263,10 +280,10 @@ def time_deploy(pipelines):
         
         avgTimeDeploy =  AvgTime(pipeline)
         
-        #if avgTimeDeploy:
-        #     segund = change_in_segund(avgTimeDeploy)
-    info={'provider':provider,'projeto':projeto,'app':app,'time':segund}
-    info_deploy.append(info)
+        if avgTimeDeploy:
+           info={'provider':provider,'projeto':projeto,'app':app,'time':change_in_segunds(avgTimeDeploy)}
+           info_deploy.append(info)
+    
     return(info_deploy)
     
 def time_stages(pipelines):
@@ -277,12 +294,12 @@ def time_stages(pipelines):
         projeto  = pipeline['id'].split(':')[4]
         app      = pipeline['id'].split(':')[5]
         
-        stage,avgTimeStage =  AvgTimeStage(pipeline)
+        avgTimeStage =  AvgTimeStage(pipeline)
         
         if avgTimeStage:
-             segund = change_in_segund(avgTimeDeploy)
-             info={'provider':provider,'projeto':projeto,'app':app,'time':segund}
-             info_stages.append(info)
+            for stage in avgTimeStage:
+                info={'provider':provider,'projeto':projeto,'app':app,'stage':stage,'time':change_in_segunds(avgTimeStage[stage])}
+                info_stages.append(info)
 
     return(info_stages)
 

@@ -3,20 +3,22 @@ services:
   prometheus:
     image: prom/prometheus
     volumes:
-     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"
+      - ./prometheus/:/etc/prometheus/
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
     ports:
       - 9090:9090
       
   
   grafana:
     image: grafana/grafana
-    ports:
-      - 3000:3000
-    links:
-      - prometheus  
     depends_on:
       - prometheus  
+    ports:
+      - 3000:3000
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=redepp
+      - GF_USERS_ALLOW_SIGN_UP=false
 
   dynamodb:
     image: amazon/dynamodb-local
@@ -25,6 +27,7 @@ services:
 
 
   code-metrics-api:
+    container_name: code-metrics-api
     build: ../code-metrics-api/.
     ports:
        - 8080:8080

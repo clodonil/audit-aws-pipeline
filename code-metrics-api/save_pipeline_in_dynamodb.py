@@ -44,7 +44,17 @@ def query_dynamodb(table,id):
     return item
 
 if __name__ == '__main__':    
-   dydb  = boto3.resource('dynamodb', region_name='us-west-1', endpoint_url="http://localhost:8000")
+   #dydb  = boto3.resource('dynamodb', region_name='us-west-1', endpoint_url="http://dynamodb:8000")
+   dydb = boto3.resource(
+                         'dynamodb',
+                          region_name='us-west-1',
+                          endpoint_url='http://dynamodb:8000',
+                          aws_access_key_id='ACCESS_ID',
+                          aws_secret_access_key='ACCESS_KEY'
+                        )
+
+
+
    table_name = 'code-metrics'
    table = dydb.Table(table_name)
 

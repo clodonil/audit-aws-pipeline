@@ -1,0 +1,39 @@
+{
+  "detail": {
+    "pipeline_status":"FAILED",
+    "running": [
+      {
+        "5071630b-3d1b-4f84-9cc8-1582f64f93f3": {
+          "account": "32584782372862",
+          "finished": "2019-04-17T21:22:10Z",
+          "log": {},
+          "source": "aws.codepipeline",
+          "stages": [
+            {
+              "Source": {
+                "execute": [],
+                "output": [],
+                "provider": "CodeCommit",
+                "start": "2019-04-17T21:20:00Z",
+                "status": "SUCCEEDED"
+              }
+            },
+            {
+              "Build": {
+                "execute": [],
+                "finished": "2019-04-17T21:22:07Z",
+                "output": [],
+                "provider": "CodeBuild",
+                "start": "2019-04-17T21:20:01Z",
+                "status": "SUCCEEDED"
+              }
+            }
+          ],
+          "start": "2019-04-17T21:19:54Z",
+          "status": "FAILED"
+        }
+      }
+    ]
+  },
+  "id": "arn:aws:codepipeline:us-east-1:3422334324:Homolog"
+}

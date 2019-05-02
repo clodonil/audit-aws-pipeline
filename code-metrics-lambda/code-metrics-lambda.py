@@ -9,7 +9,7 @@ def lambda_handler(event, context):
     print("Context:",event)
     
     dydb = boto3.resource('dynamodb')
-    table = dydb.Table('auditpipelines')
+    table = dydb.Table('code-metrics')
     item = {}
     
     if isinstance(context,dict):

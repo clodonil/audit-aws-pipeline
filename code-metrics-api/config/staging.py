@@ -1,5 +1,7 @@
 #config staging
+import os
 
-REGION_NAME  = 'us-west-1'
-ENDPOINT_URL = "http://localhost:8000"
-
+REGION_NAME  = os.environ['AWS_REGION']
+ENDPOINT_URL = os.environ['DYNAMODB']
+ACCESS_ID    = os.environ['AWS_ACCESS_ID']
+ACCESS_KEY   = os.environ['AWS_SECRET_KEY']
