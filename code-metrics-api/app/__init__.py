@@ -21,14 +21,15 @@ api = Api(app, prefix='/api/v1')
 
 
 # Controllers
-from app.controllers.pipelines  import *
-from app.controllers.metrics    import metrics
-from app.controllers.status     import * 
+from app.controllers.pipelines    import * 
+from app.controllers.metrics      import metrics
+from app.controllers.healthcheck  import healthcheck
 
 
 # Definiando os routers
 api.add_resource(Pipeline,   '/pipeline')
 api.add_resource(Pipelines,  '/pipelines')
-api.add_resource(Healthcheck,'/healthcheck')
 
+
+app.register_blueprint(healthcheck,url_prefix='/healthcheck')
 app.register_blueprint(metrics, url_prefix='/metrics')
