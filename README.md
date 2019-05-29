@@ -35,14 +35,13 @@ API consome os dados gravados no DynamoDB e expõem os dados com as seguintes po
 |/api/v1/pipelines|Saída estruturada de todas as pipelines|
 |/api/v1/pipeline|Saída estruturada de uma pipeline|
 
-[Para mais informação](docs/API.md) consulte a documentação.
+Para mais informação consulte a [documentação](docs/API.md).
 
 ## Code-metrics-cf
 
-## Code-metrics-Dev
-
-
 ## Contribuindo
+
+No diretório [code-metrics-dev](code-metrics-dev) tem tudo que você precisa para ajudar no desenvolvimento desse projeto, desde o build dos container até a criação do dynamoDB localmente.
 
 1. Primeiramente realize um `Fork` do projeto;
 2. Crie sua feature branch: `git checkout -b my-new-feature`

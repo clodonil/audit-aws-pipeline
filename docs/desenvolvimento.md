@@ -14,7 +14,7 @@ docker-compose up -d
 
 # Populando o DynamoDB
 
-Para trabalhar na API, é necessário ter valores gravados no `Dynamodb-local`. Em produção o `Dynamodb` será populado pelo `lambda` da AWS. Entretanto nesse caso local, podemos quere apenas popular o dynamodb para seguirmos o desenvolvimento.
+Para trabalhar na API, é necessário ter valores gravados no `Dynamodb-local`. Em produção o `Dynamodb` será populado pelo `lambda` da AWS. Entretanto nesse caso local, podemos apenas popular o dynamodb para seguirmos o desenvolvimento.
 
 Para esse caso utilize o script `save_pipeline_in_dynamodb.py`.
 
