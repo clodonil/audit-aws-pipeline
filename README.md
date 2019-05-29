@@ -43,6 +43,8 @@ Para mais informação consulte a [documentação](docs/API.md).
 
 No diretório [code-metrics-dev](code-metrics-dev) tem tudo que você precisa para ajudar no desenvolvimento desse projeto, desde o build dos container até a criação do dynamoDB localmente.
 
+Para mais informação consulte a [documentação](docs/desenvolvimento.md).
+
 1. Primeiramente realize um `Fork` do projeto;
 2. Crie sua feature branch: `git checkout -b my-new-feature`
 3. Realize suas mudanças e faça os commits: `git commit -am "adicione a feature`
