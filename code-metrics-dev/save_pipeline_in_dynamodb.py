@@ -43,18 +43,39 @@ def query_dynamodb(table,id):
     item = table.get_item(Key= { 'id' : id })
     return item
 
+def update(table,resource_id, pipeline):
+    table.update_item(Key={'id' :resource_id},
+                      UpdateExpression="set detail = :a",
+                      ExpressionAttributeValues={':a': pipeline['detail']},      
+                      ReturnValues="UPDATED_NEW"
+                      )
+
+def search(id):
+    item = table.get_item(Key= { 'id' : id })
+    return item
+
 if __name__ == '__main__':    
    dydb  = boto3.resource('dynamodb', region_name='us-west-1', endpoint_url="http://localhost:8000")
    table_name = 'code-metrics'
    table = dydb.Table(table_name)
 
-   with open('pipeline.txt') as json_file:  
+   with open('pipeline2.txt') as json_file:  
       pipeline = json.load(json_file)
 
-   print("Deletando a tabela:", table_name)
+   id = 'arn:aws:codepipeline:us-east-1:3422334324:Homolog'
+   
+   
+   
+
+   update(table,id,pipeline)
+   print(json.dumps(search(id), indent=4, sort_keys=True))
+
+   #print("Deletando a tabela:", table_name)
    #delete_table(dydb,table_name) 
-   print("Criando a tabela:", table_name)
-   create_table(dydb,table_name)
-   table.put_item(Item=pipeline)
-   print(query_dynamodb(dydb,pipeline['id'])) 
+   
+   
+   #print("Criando a tabela:", table_name)
+   #create_table(dydb,table_name)
+   #table.put_item(Item=pipeline)
+   #print(query_dynamodb(dydb,pipeline['id'])) 
     
