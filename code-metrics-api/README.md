@@ -4,6 +4,8 @@
 API:
 
 ```
+curl -X GET -H 'Content-type: application/json'   http://localhost:8080/api/v1/pipelines
+
 GET /api/v1/pipelines        # Retorna o id, status atual e número de execução da pipeline
 
     Saída:
@@ -11,6 +13,7 @@ GET /api/v1/pipelines        # Retorna o id, status atual e número de execuçã
            id: xxxx, status: Green, NumExec: 10 
        }
 
+curl -X GET -H 'Content-type: application/json' -d '{"id":"arn:aws:codepipeline:us-east-1:325847872862:Clair-CI"}'  http://localhost:8080/api/v1/pipeline
 GET /api/v1/pipeline/id      # Retorna as informação completa de um pipeline
 
     Saída:

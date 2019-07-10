@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_restful import reqparse, abort, Api, Resource
-from app.dynamopipeline  import pipelinefull, getpipeline
+from app.dynamopipeline  import pipelinefull, pipeline_detail
 
 parser = reqparse.RequestParser()
 parser.add_argument('id'  ,type=str, location="json", required=True)
@@ -30,7 +30,7 @@ class Pipeline(Resource):
         '''
         args = parser.parse_args()
         id   = args['id']
-        (retorno, msg) = getpipeline(id)
+        (retorno, msg) = pipeline_detail(id)
         if retorno:
            msg =  {"status": 'success', 'message' : msg}
            return msg, 201

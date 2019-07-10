@@ -1,0 +1,72 @@
+---
+
+Description: CodePipeline notifications.
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  queue:
+    Description: Nome da Queue
+    Type: String
+    Default: codemetrics
+
+Resources:
+  RoleSQSCodeMetrics:
+       Type: AWS::IAM::Role
+       Properties:
+         AssumeRolePolicyDocument:
+           Version: '2012-10-17'
+           Statement:
+           - Effect: Allow
+             Principal:
+               Service:
+               - events.amazonaws.com
+               - sqs.amazonaws.com
+             Action:
+             - sts:AssumeRole
+         Path: "/"
+         Policies:
+         - PolicyName: SqsCodeMetricsRole
+           PolicyDocument:
+             Version: '2012-10-17'
+             Statement:
+             - Effect: Allow
+               Action:
+               - sqs:*
+               Resource: !GetAtt SQSCodeMetricsQueue.Arn
+
+  EventRuleStages: 
+    Type: "AWS::Events::Rule"
+    Properties:
+      Name: Pipeline-notification-stages 
+      Description: "EventRule"
+      EventPattern: 
+        source:
+        - aws.codepipeline
+      State: "ENABLED"
+      RoleArn: !GetAtt RoleSQSCodeMetrics.Arn
+      Targets: 
+        - 
+          Arn: !GetAtt SQSCodeMetricsQueue.Arn
+          Id:  !Ref queue
+
+
+  SQSCodeMetricsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Ref queue
+      MessageRetentionPeriod: 777600
+
+  CodeMetricsQueuePolicy:      
+    Type: AWS::SQS::QueuePolicy
+    Properties: 
+      PolicyDocument:
+        Version: 2012-10-17
+        Id: MyQueuePolicy
+        Statement: 
+         - Effect: Allow
+           Principal: 
+              Service:
+                - events.amazonaws.com
+                - sqs.amazonaws.com                       
+           Action: ['sqs:SendMessage']
+           Resource: !GetAtt SQSCodeMetricsQueue.Arn
+      Queues: [!Ref 'SQSCodeMetricsQueue']
