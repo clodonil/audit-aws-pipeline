@@ -28,10 +28,18 @@ class CodeMetricsLambda:
             print("Problema na connexao com o sqs")
             return False
 
-    def load_sqs(self,conn,limit):
+    def load_sqs(self,conn):
         event = []
-        for item in conn.receive_messages(MaxNumberOfMessages=limit):
-            event.append(item)
+        semafaro = True
+
+        while semafaro:
+           messages = conn.receive_messages(MaxNumberOfMessages=10, AttributeNames=['All'], WaitTimeSeconds=1)
+
+           if not messages:
+              semafaro = False
+           else:
+             for item in messages:
+                 event.append(item)
 
         return event
 
@@ -40,22 +48,22 @@ class CodeMetricsLambda:
         return event
 
     def get_header(self,event):
-         header = {}
-         if len(event['detail']) in [4,5,8]:
-           header['execution_id'] = event['detail']['execution-id']
-           header['length']       = len(event['detail'])
-           header['resource_id']  = event['resources'][0]
-         else:
-           header['execution_id'] = event['detail']['responseElements']['pipelineExecutionId']
-           header['length']       = len(event['detail'])
-           account                =  event['detail']['userIdentity']['accountId']
-           source                 =  event['source'].split('.')[1]
-           name                   =  event['detail']['requestParameters']['name']
-           region                 =  event['region']
-           resource_id            =  "arn:aws:{0}:{1}:{2}:{3}".format(source,region,account,name)
-           header['resource_id']  = resource_id
+        header = {}
+        if len(event['detail']) in [4,5,8]:
+            header['execution_id'] = event['detail']['execution-id']
+            header['length']       = len(event['detail'])
+            header['resource_id']  = event['resources'][0]
+        else:
+            header['execution_id'] = event['detail']['responseElements']['pipelineExecutionId']
+            header['length']       = len(event['detail'])
+            account                =  event['detail']['userIdentity']['accountId']
+            source                 =  event['source'].split('.')[1]
+            name                   =  event['detail']['requestParameters']['name']
+            region                 =  event['region']
+            resource_id            =  "arn:aws:{0}:{1}:{2}:{3}".format(source,region,account,name)
+            header['resource_id']  = resource_id
 
-         return header
+        return header
 
     def nova_pipeline(self,pipelinedb):
         if 'Item' in pipelinedb:
@@ -63,63 +71,76 @@ class CodeMetricsLambda:
         else:
             return True
 
-    def proc_events(self, dytable,conn_sqs,limit):
-        sqs_file = self.load_sqs(conn_sqs,limit)
+    def proc_events(self, dytable,conn_sqs):
 
-        for item  in sqs_file:
-            # change string in json
-            event  = self.event_pipeline(item)
+        sqs_file = self.load_sqs(conn_sqs)
 
-            #get header do json
-            header = self.get_header(event)
+        semafaro = True
 
-            query = { 'id' : header['resource_id'] }
-            # Recupera a pipeline salva no dynamodb
-            if header['length'] in [4,5,8,13]:
-               pipelinedb   = self.dynamodb_query(dytable,query)
-               pipelineold  = copy.deepcopy(pipelinedb)
+        while semafaro:
+            semafaro = False
+            lista_item_salvos = []
 
-               if self.nova_pipeline(pipelinedb):
-                  if header['length'] == 4:
-                      pipelines=self.create_estrutura(event)
-                      self.save_pipeline(pipelinedb, pipelines,dytable)
+            for item  in sqs_file:
+                # change string in json
+                event  = self.event_pipeline(item)
 
-                      # Registrando o catalogo
-                      key= { 'id' : 'pipelines' }
-                      lista_pipelines = self.dynamodb_query(dytable,key)
-                      catalogo        = self.registra_catalogo(lista_pipelines, event['account'], header['resource_id'])
-                      self.dynamodb_save(dytable, catalogo, key)
-               else:
-                   pipelines    = { 'id': header['resource_id'], 'detail': pipelinedb['Item']['detail'] }
+                #get header do json
+                header = self.get_header(event)
 
-                   # create e update pipeline
-                   if header['length'] == 4:
-                      pipelines = self.create_pipeline(event,pipelines)
+                query = { 'id' : header['resource_id'] }
+                # Recupera a pipeline salva no dynamodb
+                if header['length'] in [4,5,8,13]:
+                    pipelinedb   = self.dynamodb_query(dytable,query)
+                    pipelineold  = copy.deepcopy(pipelinedb)
 
-                   # create e update stages
-                   elif header['length'] == 5:
-                      if self.exist_pipeline(header['execution_id'],pipelines):
-                         pipelines=self.stages(event,pipelines)
+                    if self.nova_pipeline(pipelinedb):
+                        if header['length'] == 4:
+                            pipelines=self.create_estrutura(event)
+                            self.save_pipeline(pipelinedb, pipelines,dytable)
 
-                   # create e update action
-                   elif header['length'] == 8:
-                      if self.exist_stage(event,pipelines):
-                          pipelines=self.actions(event,pipelines)
+                            # Registrando o catalogo
+                            key= { 'id' : 'pipelines' }
+                            lista_pipelines = self.dynamodb_query(dytable,key)
+                            catalogo        = self.registra_catalogo(lista_pipelines, event['account'], header['resource_id'])
+                            self.dynamodb_save(dytable, catalogo, key)
+                    else:
+                        pipelines    = { 'id': header['resource_id'], 'detail': pipelinedb['Item']['detail'] }
 
-                   elif header['length'] == 13:
-                      if self.exist_pipeline(header['execution_id'],pipelines):
-                         pipelines = self.pipelineLog(header,event,pipelines)
+                        # create e update pipeline
+                        if header['length'] == 4:
+                            pipelines = self.create_pipeline(event,pipelines)
 
-                   if self.item_usage(pipelineold,pipelines):
-                      if self.save_pipeline(pipelinedb, pipelines,dytable):
-                         if self.sqs_delete_item(item):
-                            msg="{0} deletado da Fila SQS e Incluido no DynamoDB".format(header['execution_id'])
-                            print(msg)
-                            # self.saveLog(event)
+                        # create e update stages
+                        elif header['length'] == 5:
+                            if self.exist_pipeline(header['execution_id'],pipelines):
+                                pipelines=self.stages(event,pipelines)
+
+                        # create e update action
+                        elif header['length'] == 8:
+                            if self.exist_stage(event,pipelines):
+                                pipelines=self.actions(event,pipelines)
+
+                        elif header['length'] == 13:
+                            if self.exist_pipeline(header['execution_id'],pipelines):
+                                pipelines = self.pipelineLog(header,event,pipelines)
+
+                        if self.item_usage(pipelineold,pipelines):
+                            if self.save_pipeline(pipelinedb, pipelines,dytable):
+                                if self.sqs_delete_item(item):
+                                    lista_item_salvos.append(item)
+                                    msg="{0} deletado da Fila SQS e Incluido no DynamoDB".format(header['execution_id'])
+                                    print(msg)
+                                    # self.saveLog(event)
+            for item in lista_item_salvos:
+                sqs_file.remove(item)
+                semafaro = True
+
+        #Salvar aqui
 
     def saveLog(self,event):
         with open('logs.json', 'a') as json_file:
-             json.dump(event, json_file)
+            json.dump(event, json_file)
 
     def nova_conta_catalogo(self, account, catalogo):
         if account in catalogo:
@@ -141,30 +162,30 @@ class CodeMetricsLambda:
     def item_usage(self,pipelinedb,pipelines):
         #Verifica se ouve mudanca na pipeline
         if self.nova_pipeline(pipelinedb):
-           old = []
+            old = []
         else:
-           old = pipelinedb['Item']['detail']
+            old = pipelinedb['Item']['detail']
         new = pipelines['detail']
 
         if old != new:
-           return True
+            return True
         else:
-           return False
+            return False
 
     def sqs_delete_item(self,item):
         retorno = item.delete()
         if retorno['ResponseMetadata']['HTTPStatusCode'] == 200:
-           return True
+            return True
         else:
-           return False
+            return False
 
     def save_pipeline(self,pipelinedb, pipeline,dytable):
         if self.nova_pipeline(pipelinedb):
-           key={'id': pipeline['resources']}
-           retorno = self.dynamodb_save(dytable, pipeline['detail'], key)
+            key={'id': pipeline['resources']}
+            retorno = self.dynamodb_save(dytable, pipeline['detail'], key)
         else:
-           estrutura={'id':pipeline['id'],'detail': pipeline['detail']}
-           retorno=self.dynamodb_save(dytable, estrutura, False)
+            estrutura={'id':pipeline['id'],'detail': pipeline['detail']}
+            retorno=self.dynamodb_save(dytable, estrutura, False)
         return retorno
 
     def dynamodb_save(self,table,pipeline,estrutura):
@@ -173,14 +194,14 @@ class CodeMetricsLambda:
             retorno=table.put_item(Item=estrutura)
         else:
             retorno=table.update_item(Key={'id':pipeline['id']},
-                              UpdateExpression="set detail = :a",
-                              ExpressionAttributeValues={':a': pipeline['detail']},
-                              ReturnValues="UPDATED_NEW"
-                              )
+                                      UpdateExpression="set detail = :a",
+                                      ExpressionAttributeValues={':a': pipeline['detail']},
+                                      ReturnValues="UPDATED_NEW"
+                                      )
         if retorno['ResponseMetadata']['HTTPStatusCode'] == 200:
-           return True
+            return True
         else:
-           return False
+            return False
 
     def dynamodb_query(self,table,query):
         return table.get_item(Key=query)
@@ -188,9 +209,9 @@ class CodeMetricsLambda:
     def exist_pipeline(self,execution_id,pipeline):
         running = [running for running in pipeline['detail']['running'] if list(running.keys())[0]==execution_id]
         if running:
-           return True
+            return True
         else:
-           return False
+            return False
 
     def exist_stage(self,event,pipeline):
         execution_id =  event['detail']['execution-id']
@@ -199,17 +220,17 @@ class CodeMetricsLambda:
         if running:
             stages = [stages for stages in running[0][execution_id]['stages'] if list(stages.keys())[0] == stage]
             if stages:
-               return True
+                return True
             else:
-               return False
+                return False
 
     def create_estrutura(self,event):
         resource_id  = event['resources'][0]
         pipeline = {
-             "resources" : resource_id,
-             "detail": {
-                     "running": [ ]
-                       }
+            "resources" : resource_id,
+            "detail": {
+                "running": [ ]
+            }
         }
         return pipeline
 
@@ -235,7 +256,7 @@ class CodeMetricsLambda:
         execution_id = header['execution_id']
         running = [running for running in pipeline['detail']['running'] if list(running.keys())[0]==execution_id]
         if running:
-           running[0][execution_id]['logs'] = event
+            running[0][execution_id]['logs'] = event
 
         return pipeline
 
@@ -245,20 +266,20 @@ class CodeMetricsLambda:
         state        = event['detail']['state']
         running = [running for running in pipeline['detail']['running'] if list(running.keys())[0]==execution_id]
         if running:
-           stages = [stages for stages in running[0][execution_id]['stages'] if list(stages.keys())[0] == stage]
+            stages = [stages for stages in running[0][execution_id]['stages'] if list(stages.keys())[0] == stage]
 
-           if not stages:
-              if state == 'STARTED':
-                 stg = {}
-                 stg[stage] = {}
-                 stg[stage]['status']      = state
-                 stg[stage]['start']       = event['time']
-                 stg[stage]['action']      = []
-                 stg[stage]['finished']    = "Null"
-                 running[0][execution_id]['stages'].append(stg)
-           else:
-              stages[0][stage]['finished']  = event['time']
-              stages[0][stage]['status']    = state
+            if not stages:
+                if state == 'STARTED':
+                    stg = {}
+                    stg[stage] = {}
+                    stg[stage]['status']      = state
+                    stg[stage]['start']       = event['time']
+                    stg[stage]['action']      = []
+                    stg[stage]['finished']    = "Null"
+                    running[0][execution_id]['stages'].append(stg)
+            else:
+                stages[0][stage]['finished']  = event['time']
+                stages[0][stage]['status']    = state
 
         return pipeline
 
@@ -274,15 +295,15 @@ class CodeMetricsLambda:
                 actions = [actions for actions in stages[0][stage]['action'] if list(actions.keys())[0] == action]
                 if not actions:
                     if state == 'STARTED':
-                       act = {}
-                       act[action] = {}
-                       act[action]['provider']  = event['detail']['type']['provider']
-                       act[action]['status']    = state
-                       act[action]['start']     = event['time']
-                       act[action]['eventid']   = event['id']
-                       act[action]['logs']      = []
-                       act[action]['finished']  = "Null"
-                       stages[0][stage]['action'].append(act)
+                        act = {}
+                        act[action] = {}
+                        act[action]['provider']  = event['detail']['type']['provider']
+                        act[action]['status']    = state
+                        act[action]['start']     = event['time']
+                        act[action]['eventid']   = event['id']
+                        act[action]['logs']      = []
+                        act[action]['finished']  = "Null"
+                        stages[0][stage]['action'].append(act)
                 else:
                     actions[0][action]['finished']  = event['time']
                     actions[0][action]['status']    = state
@@ -292,5 +313,21 @@ class CodeMetricsLambda:
         dytable = self.conn_dynamodb(self.dynamo_table, self.dynamo_region)
         conn = self.conn_sqs(self.sqs_fila, self.sqs_region)
         if dytable and conn:
-            for k in range(0,9):
-                self.proc_events(dytable, conn, 10)
+           self.proc_events(dytable, conn)
+
+
+
+
+#
+#from codemetricslambda import CodeMetricsLambda
+
+#dynamo_table  = 'codemetrics'
+#dynamo_region = 'sa-east-1'
+#sqs_fila      = 'codemetrics'
+#sqs_region    = 'sa-east-1'
+
+#x = CodeMetricsLambda(dynamo_table, dynamo_region, sqs_fila, sqs_region)
+
+#x.running()
+
+#print('finalizado')
