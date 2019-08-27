@@ -1,4 +1,4 @@
-from flask import Flask, Blueprint
+from flask import Flask, Blueprint, redirect, url_for
 from flask_restful import reqparse, abort, Api, Resource
 from prometheus_flask_exporter import PrometheusMetrics
 
@@ -12,6 +12,11 @@ metrics = PrometheusMetrics(app)
 
 # Router de versao para API
 api = Api(app, prefix='/api/v1')
+
+#redirect para o metrics
+@app.route('/')
+def index():
+    return redirect('metrics')
 
 
 # Controllers

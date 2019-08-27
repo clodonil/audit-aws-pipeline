@@ -5,14 +5,15 @@ import copy
 import time
 import os
 
-#def lambda_handler(event, context):
-
-
+def lambda_handler(event, context):
+    codemetrics =  CodeMetricsLambda()
+    codemetrics.running()
+    
 
 class CodeMetricsLambda:
     def __init__(self):
         self.sqs_fila   = 'codemetrics'
-        self.sqs_region = 'us-east-1'
+        self.sqs_region = 'sa-east-1'
 
         self.dytbmetricas  = 'codemetrics-metricas'
         self.dytbdetail    = 'codemetrics-pipelines'
@@ -82,15 +83,21 @@ class CodeMetricsLambda:
 
         while semafaro < 2 and len(sqs_file) != 0:
 
-            itens_usado = False
+            
 
             for item  in sqs_file:
                 # change string in json
                 event  = self.event_pipeline(item)
+                
+                # contrala se o evento foi usado
+                used = False
 
                 #get header do json
                 header = self.get_header(event)
-
+                
+                print("Items", len(sqs_file))
+                print("Semafaro:", semafaro )
+                
 
                 # Recupera a pipeline salva no dynamodb
                 if header['length'] in [4,5,8]:
@@ -101,42 +108,45 @@ class CodeMetricsLambda:
 
                     if self.nova_pipeline(pipelinedb):
                         if header['length'] == 4:
-                            pipelines=self.create_pipeline(event)
+                            used, pipelines=self.create_pipeline(event)
                             if pipelines:
                                 self.save_pipeline(pipelinedb,pipelines,tbdetail,header['execution_id'])
-
                                 # Registrando o catalogo
-                                key= { 'id' : 'pipelines', 'account': header['account'] }
+                                key= { 'account' : header['account'], 'resource_id': header['resource_id'] }
                                 lista_pipelines = self.dynamodb_query(tbmetricas,key)
-                                catalogo        = self.registra_catalogo(lista_pipelines, header['account'], header['resource_id'])
-
-                                dados = {'id':'pipelines', 'account':header['account'],'detail': catalogo }
-                                self.dynamodb_save(tbmetricas, dados, True)
+                                if self.nova_pipeline(lista_pipelines):
+                                   catalogo = self.registra_catalogo()
+                                   dados    = {'account': header['account'], 'resource_id': header['resource_id'],'detail': catalogo }
+                                   self.dynamodb_save_metrics(tbmetricas, header['account'] ,header['resource_id'], dados, True)
                     else:
                         pipelines = { 'id': header['resource_id'], 'running':header['execution_id'], 'detail': pipelinedb['Item']['detail'] }
 
                         # create e update pipeline
                         if header['length'] == 4:
-                            pipelines = self.finished_pipeline(event,pipelines)
+                            used,pipelines = self.finished_pipeline(event,pipelines)
 
                         # create e update stages
                         elif header['length'] == 5:
                             if self.exist_pipeline(pipelines):
-                                pipelines=self.stages(event,pipelines)
+                                used, pipelines=self.stages(event,pipelines)
 
                         # create e update action
                         elif header['length'] == 8:
                             if self.exist_stage(event,pipelines):
-                                pipelines=self.actions(event,pipelines)
+                                used, pipelines=self.actions(event,pipelines)
 
-                    if self.item_used(pipelineold,pipelines):
+                    #if self.item_used(pipelineold,pipelines):
+                    if used:
+                        print(used)
+                        print(event)
+                        print(pipelines)
                         if self.save_pipeline(pipelinedb, pipelines,tbdetail,header['execution_id']):
                             if self.pipeline_completed(pipelines):
                                 # Salva as metricas da pipeline
                                 self.salve_metrics(pipelines,tbmetricas, header['account'])
                             if self.sqs_delete_item(item):
                                 sqs_file.remove(item)
-                                itens_usado = True
+                                used = True
                                 msg="{0} deletado da Fila SQS e Incluido no DynamoDB".format(header['execution_id'])
                                 print(msg)
 
@@ -146,7 +156,7 @@ class CodeMetricsLambda:
                     if self.dynamodb_save(tbraw, dados, True):
                         self.sqs_delete_item(item)
 
-            if not itens_usado:
+            if not used:
                 semafaro += 1
 
         #Salvar aqui
@@ -155,15 +165,10 @@ class CodeMetricsLambda:
         with open('logs.json', 'a') as json_file:
             json.dump(event, json_file)
 
-    #def nova_conta_catalogo(self, account, catalogo):
-    #    if account in catalogo:
-    #        return False
-    #    else:
-    #        return True
 
-    def registra_catalogo(self,lista_pipelines, account, resource_id):
+    def registra_catalogo(self):
 
-        resource = {resource_id : { 'pipeline_status' : 'Null',
+        resource =  { 'pipeline_status' : 'Null',
                       'stages': 'Null',
                       'running':[],
                       'sum_success': '0',
@@ -171,15 +176,12 @@ class CodeMetricsLambda:
                       'stage_faild':{},
                       'action_faild':{},
                       'deploy_day':[],
+                      'runtime' : 'Null',
+                      'pipe_version': 'Null',
                       'time_deploy': '0'
                     }
-                  }
-        catalogo = [resource]
-        if not self.nova_pipeline(lista_pipelines):
-            catalogo = lista_pipelines['Item']['detail']
-            if not resource_id in catalogo[0]:
-               catalogo.append(resource)
-        return catalogo
+                  
+        return resource
 
     def item_used(self,pipelinedb,pipelines):
         #Verifica se ouve mudanca na pipeline
@@ -206,6 +208,7 @@ class CodeMetricsLambda:
 
     def save_pipeline(self,pipelinedb, pipelines,dytable, running):
         if self.nova_pipeline(pipelinedb):
+            print(pipelines)
             dados={'id': pipelines['resources'],'running':running, 'detail': pipelines['detail'] }
             retorno=self.dynamodb_save(dytable,dados,True)
 
@@ -228,9 +231,12 @@ class CodeMetricsLambda:
         else:
             return False
 
-    def dynamodb_save_metrics(self,table,account, dados):
+    def dynamodb_save_metrics(self,table,account, resource_id, dados, new):
 
-        retorno=table.update_item(Key={'id':'pipelines','account': account},
+        if new:
+           retorno=table.put_item(Item=dados)    
+        else:   
+           retorno=table.update_item(Key={'account': account, 'resource_id': resource_id},
                                       UpdateExpression="set detail = :a",
                                       ExpressionAttributeValues={':a': dados},
                                       ReturnValues="UPDATED_NEW"
@@ -260,9 +266,11 @@ class CodeMetricsLambda:
             return False
 
     def create_pipeline(self,event):
-        state = event['detail']['state']
+        used  = False
+        state    = event['detail']['state']
         pipeline = {}
         if state == 'STARTED':
+            used         = True
             resource_id  = event['resources'][0]
             pipeline = {
                 "resources" : resource_id,
@@ -275,26 +283,30 @@ class CodeMetricsLambda:
                 }
             }
 
-        return pipeline
+        return [used, pipeline]
 
     def finished_pipeline(self,event,pipeline):
         state = event['detail']['state']
+        used  = False
         if state != 'STARTED':
+            used  = True
             pipeline['detail']['finished_pipeline'] = event['time']
             pipeline['detail']['status'] = state
-        return pipeline
+        return [used, pipeline]
 
     def stages(self,event,pipeline):
-        stage        = event['detail']['stage']
-        state        = event['detail']['state']
-
+        stage  = event['detail']['stage']
+        state  = event['detail']['state']
+        used   = False
         stages = [stages for stages in pipeline['detail']['stages'] if  list(stages.keys())[0]  ==  stage]
 
         if stages:
+            used  = True
             stages[0][stage]['finished']  = event['time']
             stages[0][stage]['status']    = state
 
         elif state == 'STARTED':
+            used  = True
             stg = {}
             stg[stage] = {}
             stg[stage]['status']      = state
@@ -304,21 +316,24 @@ class CodeMetricsLambda:
             stg[stage]['finished']    = "Null"
             pipeline['detail']['stages'].append(stg)
 
-        return pipeline
+        return [used, pipeline]
 
     def actions(self,event,pipeline):
-        stage        = event['detail']['stage']
-        action       = event['detail']['action']
-        state        = event['detail']['state']
+        stage  = event['detail']['stage']
+        action = event['detail']['action']
+        state  = event['detail']['state']
+        used   = False
 
         stages = [stages for stages in pipeline['detail']['stages'] if  list(stages.keys())[0]  ==  stage]
         if stages:
             actions = [actions for actions in stages[0][stage]['action'] if list(actions.keys())[0] == action]
             if actions:
+                used  = True
                 actions[0][action]['finished']  = event['time']
                 actions[0][action]['status']    = state
             elif state == 'STARTED':
-                act = {}
+                used  = True
+                act   = {}
                 act[action] = {}
                 act[action]['provider']  = event['detail']['type']['provider']
                 act[action]['status']    = state
@@ -327,7 +342,7 @@ class CodeMetricsLambda:
                 act[action]['finished']  = "Null"
                 stages[0][stage]['action'].append(act)
 
-        return pipeline
+        return [used, pipeline]
 
     def running(self):
         conn = self.conn_sqs(self.sqs_fila, self.sqs_region)
@@ -377,7 +392,7 @@ class CodeMetricsLambda:
             for stage in stages.keys():
                 if stages[stage]['status'] == 'SUCCEEDED':
                    time = datetime.datetime.strptime(stages[stage]['finished'],'%Y-%m-%dT%H:%M:%SZ') - datetime.datetime.strptime(stages[stage]['start'],'%Y-%m-%dT%H:%M:%SZ')
-                   control_stages[stage] =  {'time': str(self.change_in_segunds(time)),'actions':[]}
+                   control_stages[stage] =  {'time': str(self.change_in_segunds(time)/num_execucao),'actions':[]}
 
                    lista_actions = [actions for actions in stages[stage]['action']]
                    control_actions = {}
@@ -385,11 +400,10 @@ class CodeMetricsLambda:
                      for action in actions.keys():
                         if actions[action]['status'] == 'SUCCEEDED':
                            action_time = datetime.datetime.strptime(actions[action]['finished'],'%Y-%m-%dT%H:%M:%SZ') - datetime.datetime.strptime(actions[action]['start'],'%Y-%m-%dT%H:%M:%SZ')
-                           control_actions[action] = {'time': str(self.change_in_segunds(action_time))}
+                           control_actions[action] = {'time': str(self.change_in_segunds(action_time)/num_execucao)}
+                           
                    control_stages[stage]['actions'].append(control_actions)
 
-    #for control in control_stages:
-        #    control_stages[control] /= len(pipeline['detail']['running'])
         return control_stages
 
     def change_in_segunds(self,hora):
@@ -407,7 +421,7 @@ class CodeMetricsLambda:
         # tempo final
         completed = True
         stages =  [stages for stages in pipeline['detail']['stages']]
-        if pipeline['detail']['finished_pipeline'] != 'Null' and stages:
+        if pipeline['detail']['finished_pipeline'] != 'Null' and pipeline['detail']['finished_pipeline'] != 'Null'and stages:
            for stage in stages:
                for stage_name in stage.keys():
                    actions = [actions for actions in stage[stage_name]['action']]
@@ -429,58 +443,54 @@ class CodeMetricsLambda:
         Salva as metricas da pipeline
         """
         arn = pipeline['id']
-        key = { 'id' : 'pipelines', 'account': account }
+        key = { 'account' : account, 'resource_id': arn }
         dynamo_carga    = self.dynamodb_query(tbmetricas,key)
-        dynamo_metrics  = [pipe for pipe in dynamo_carga['Item']['detail'] if list(pipe.keys())[0] == arn][0]
-
+        dynamo_metrics  = dynamo_carga['Item']['detail']
         pipeline_status = pipeline['detail']['status']
 
-        if not pipeline['running'] in dynamo_metrics[arn]['running']:
-            dynamo_metrics[arn]['running'].append(pipeline['running'])
-            sum_success = int(dynamo_metrics[arn]['sum_success'])
-            sum_faild   = int(dynamo_metrics[arn]['sum_faild'])
+        if not pipeline['running'] in dynamo_metrics['running']:
+            dynamo_metrics['running'].append(pipeline['running'])
+            sum_success = int(dynamo_metrics['sum_success'])
+            sum_faild   = int(dynamo_metrics['sum_faild'])
             if pipeline_status == 'SUCCEEDED':
                sum_success += 1
                time_deploy  = datetime.datetime.strptime(pipeline['detail']['finished_pipeline'],'%Y-%m-%dT%H:%M:%SZ') - datetime.datetime.strptime(pipeline['detail']['start_pipeline'] ,'%Y-%m-%dT%H:%M:%SZ')
-               dynamo_metrics[arn]['time_deploy'] = str(self.change_in_segunds(time_deploy))
+               dynamo_metrics['time_deploy'] = str(self.change_in_segunds(time_deploy))
 
             elif pipeline_status == 'FAILED':
                sum_faild   += 1
-            dynamo_metrics[arn]['sum_success']     = str(sum_success)
-            dynamo_metrics[arn]['sum_faild']       = str(sum_faild)
+            dynamo_metrics['sum_success']     = str(sum_success)
+            dynamo_metrics['sum_faild']       = str(sum_faild)
 
         stages  =  [stages for stages in pipeline['detail']['stages']]
         if pipeline_status == 'SUCCEEDED':
            dynamo_metrics[arn]['pipeline_status'] = 1
            data = pipeline['detail']['finished_pipeline'].split('T')[0]
-           deploy_day = [x for x in dynamo_metrics[arn]['deploy_day'] if list(x.keys())[0] == data]
+           deploy_day = [x for x in dynamo_metrics['deploy_day'] if list(x.keys())[0] == data]
            if deploy_day:
               deploy_day[0][data] = str(int(deploy_day[0][data]) + 1)
            else:
-             dynamo_metrics[arn]['deploy_day'].append({data:'1'})
+             dynamo_metrics['deploy_day'].append({data:'1'})
 
         elif pipeline_status == 'FAILED':
-           dynamo_metrics[arn]['pipeline_status'] = 0
+           dynamo_metrics['pipeline_status'] = 0
 
            fail    = self.metrics_faild(stages)
            fail_stages  = fail[0]
            fail_actions = fail[1]
 
            for f_stages in fail_stages:
-              if f_stages in dynamo_metrics[arn]['stage_faild']:
-                dynamo_metrics[arn]['stage_faild'][f_stages] = str(int(dynamo_metrics[arn]['stage_faild'][f_stages]) + int(fail_stages[f_stages]))
+              if f_stages in dynamo_metrics['stage_faild']:
+                dynamo_metrics['stage_faild'][f_stages] = str(int(dynamo_metrics['stage_faild'][f_stages]) + int(fail_stages[f_stages]))
               else:
-                dynamo_metrics[arn]['stage_faild'][f_stages] = str(fail_stages[f_stages])
+                dynamo_metrics['stage_faild'][f_stages] = str(fail_stages[f_stages])
 
            for f_actions in fail_actions:
-               if f_actions in dynamo_metrics[arn]['action_faild']:
-                   dynamo_metrics[arn]['action_faild'][f_actions] = str(int(dynamo_metrics[arn]['action_faild'][f_actions]) + int(fail_actions[f_actions]))
+               if f_actions in dynamo_metrics['action_faild']:
+                   dynamo_metrics['action_faild'][f_actions] = str(int(dynamo_metrics['action_faild'][f_actions]) + int(fail_actions[f_actions]))
                else:
-                   dynamo_metrics[arn]['action_faild'][f_actions] = str(fail_actions[f_actions])
+                   dynamo_metrics['action_faild'][f_actions] = str(fail_actions[f_actions])
 
-        metrics = self.metrics_time(stages, len(dynamo_metrics[arn]['running']) )
-        dynamo_metrics[arn]['stages'] = metrics
-        self.dynamodb_save_metrics(tbmetricas,account, dynamo_carga['Item']['detail'])
-
-codemetrics =  CodeMetricsLambda()
-codemetrics.running()
+        metrics = self.metrics_time(stages, len(dynamo_metrics['running']) )
+        dynamo_metrics['stages'] = metrics
+        self.dynamodb_save_metrics(tbmetricas, account ,arn, dynamo_carga['Item']['detail'], False)

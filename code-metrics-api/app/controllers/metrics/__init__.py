@@ -1,6 +1,6 @@
 from flask import request, Blueprint, Response 
 from app.dynamopipeline import pipelineMetrics 
-from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry,generate_latest 
+from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry,generate_latest, Info
 import prometheus_client 
  
 # Rota /metrics 
@@ -20,6 +20,8 @@ TIME_ACTIONS      = Gauge('codemetrics_time_action_seconds', 'Deployment Speedy'
 PIPELINE_STATUS   = Gauge('codemetrics_pipeline_status','Status Pipeline',['provider','projeto','app'],registry=registry)
 ACTIONS_FAILD     = Gauge('codemetrics_time_actions_faild', 'Deployment Failure',['provider','projeto','app','action'],registry=registry)
 STAGES_FAILD      = Gauge('codemetrics_time_stages_faild',  'Deployment Failure',['provider','projeto','app','stage'],registry=registry)
+RUNTIME           = Info('codemetrics_runtime',  'technology',['provider','projeto','app'],registry=registry)
+PIPE_VERSION      = Info('codemetrics_pipe_version', 'Version Pipeline',['provider','projeto','app'],registry=registry)
  
  
 @metrics.route('')
@@ -72,5 +74,14 @@ def codemetrics():
        # action faild
        for status in metrics['actions_fail']:
           ACTIONS_FAILD.labels(status['provider'],status['projeto'],status['app'],status['action']).set(status['fail'])
+
+       #pipe_runtime = []
+       for status in metrics['runtime']:
+          RUNTIME.labels(status['provider'],status['projeto'],status['app']).info({'runtime':status['runtime']})
+
+       #pipe_version = []
+       for status in metrics['pipe_version']:
+          PIPE_VERSION.labels(status['provider'],status['projeto'],status['app']).info({'pipe_version':status['pipe_version']})
+
 
     return Response(prometheus_client.generate_latest(registry), mimetype=CONTENT_TYPE_LATEST)
