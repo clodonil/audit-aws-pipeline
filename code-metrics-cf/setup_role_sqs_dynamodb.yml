@@ -1,5 +1,4 @@
 ---
-
 Description: CodePipeline notifications.
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
@@ -7,6 +6,12 @@ Parameters:
     Description: Nome da Queue
     Type: String
     Default: codemetrics
+
+  TableName:
+    Description: Nome da table do DynamoDB
+    Type: String
+    Default: codemetrics
+  
 
 Resources:
   RoleSQSCodeMetrics:
@@ -36,7 +41,7 @@ Resources:
   EventRuleStages: 
     Type: "AWS::Events::Rule"
     Properties:
-      Name: Pipeline-notification-stages 
+      Name: !Sub ${TableName}-Rules-Pipeline 
       Description: "EventRule"
       EventPattern: 
         source:
@@ -53,7 +58,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Ref queue
-      MessageRetentionPeriod: 777600
+      MessageRetentionPeriod: 864000
 
   CodeMetricsQueuePolicy:      
     Type: AWS::SQS::QueuePolicy
@@ -70,3 +75,54 @@ Resources:
            Action: ['sqs:SendMessage']
            Resource: !GetAtt SQSCodeMetricsQueue.Arn
       Queues: [!Ref 'SQSCodeMetricsQueue']
+
+  DyPipelines:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${TableName}-pipelines
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: running
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: running
+          KeyType: RANGE  
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  DyMetricas:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${TableName}-metricas
+      AttributeDefinitions:
+        - AttributeName: account
+          AttributeType: S
+        - AttributeName: resource_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: account
+          KeyType: HASH
+        - AttributeName: resource_id
+          KeyType: RANGE  
+
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  DyRaw:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${TableName}-raw
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
