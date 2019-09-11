@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_restful import reqparse, abort, Api, Resource
-from app.dynamopipeline  import pipelinefull, pipeline_detail
+from src.dynamopipeline  import pipelinefull, pipeline_detail
 
 parser = reqparse.RequestParser()
 parser.add_argument('id'  ,type=str, location="json", required=True)

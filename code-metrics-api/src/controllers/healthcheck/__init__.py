@@ -1,5 +1,5 @@
 from flask import Flask,Blueprint
-from app.dynamopipeline  import status
+from src.dynamopipeline  import status
 
 
 # Rota /healthcheck

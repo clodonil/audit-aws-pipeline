@@ -21,8 +21,8 @@ def index():
 
 # Controllers
 #from app.controllers.pipelines    import * 
-from app.controllers.metrics      import metrics
-from app.controllers.healthcheck  import healthcheck
+from src.controllers.metrics      import metrics
+from src.controllers.healthcheck  import healthcheck
 
 
 # Definiando os routers

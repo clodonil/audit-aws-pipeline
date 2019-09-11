@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: 2010-09-09 
+Description: > 
+  Deploy do Lambda com codigo no S3. 
+Parameters: 
+  LambdaRate: 
+    Description: Frequencia de execucao do lambda. 
+    Type: String 
+    Default: rate(4 minute) 
+    #Type:  'AWS::SSM::Parameter::Value<String>' 
+    #Default: '/codemetrics/lambdarate'     
+    #AllowedValues: 
+    #  - rate(1 minute) 
+    #  - rate(10 minutes) 
+    #  - rate(60 minutes) 
+    #Type: String 
+ 
+  CodeS3Name: 
+    Description: Nome do pacote no S3 para deploy 
+    Default: codemetrics-lambda-0.1.zip 
+    Type: String 
+ 
+  S3Bucket: 
+    Description: Nome do Bucket com o pacote zip do lambda 
+    #Default: codemetrics-lambda 
+    Type:  String 
+    Default: pipeline-codemetrics-lambda 
+ 
+ 
+  ArnFilaSQS: 
+    Description: Arn da Fila SQS 
+    #Type:  String 
+    #Default: arn:aws:sqs:sa-east-1:325847872862:codemetrics     
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/codemetrics/arnsqs' 
+ 
+  ArnDynamoDB: 
+    Description: Arn da tabela do DynamoDB 
+    #Default: arn:aws:dynamodb:sa-east-1:325847872862:table/codemetrics 
+    #Type:  String 
+    Type:  'AWS::SSM::Parameter::Value<String>' 
+    Default: '/codemetrics/dynamodb' 
+ 
+Resources: 
+ 
+  LambdaExecutionRole: 
+       Type: AWS::IAM::Role 
+       Properties: 
+         AssumeRolePolicyDocument: 
+           Version: '2012-10-17' 
+           Statement: 
+           - Effect: Allow 
+             Principal: 
+               Service: 
+               - sqs.amazonaws.com 
+               - lambda.amazonaws.com 
+             Action: 
+             - sts:AssumeRole 
+         Path: "/" 
+         Policies: 
+         - PolicyName: SqsCodeMetricsRole 
+           PolicyDocument: 
+             Version: '2012-10-17' 
+             Statement: 
+             - Effect: Allow 
+               Action: 
+               - sqs:* 
+               Resource: !Ref ArnFilaSQS 
+             - Effect: Allow 
+               Action: 
+                 - "s3:DeleteObject" 
+                 - "s3:GetObjectVersion" 
+                 - "s3:GetObject" 
+                 - "s3:ListBucket" 
+                 - "s3:PutObject" 
+                 - "s3:GetBucketPolicy" 
+               Resource: 
+                 - Fn::Sub: arn:aws:s3:::${S3Bucket} 
+                 - Fn::Sub: arn:aws:s3:::${S3Bucket}/* 
+             - Effect: Allow 
+               Action: 
+               - logs:* 
+               Resource: arn:aws:logs:*:*:* 
+             - Effect: Allow 
+               Action: 
+                 - "dynamodb:*" 
+               Resource: !Ref ArnDynamoDB 
+ 
+ 
+  LambdaSchedule: 
+    Type: "AWS::Events::Rule" 
+    Properties: 
+      Description: > 
+        A schedule for the Lambda function.. 
+      ScheduleExpression: !Ref LambdaRate 
+      State: ENABLED 
+      Targets: 
+        - Arn: !Sub ${LambdaFunction.Arn} 
+          Id: LambdaSchedule 
+ 
+  LambdaSchedulePermission: 
+    Type: "AWS::Lambda::Permission" 
+    Properties: 
+      Action: 'lambda:InvokeFunction' 
+      FunctionName: !Sub ${LambdaFunction.Arn} 
+      Principal: 'events.amazonaws.com' 
+      SourceArn: !Sub ${LambdaSchedule.Arn} 
+ 
+  LambdaFunction: 
+    Type: "AWS::Lambda::Function" 
+    Properties: 
+      FunctionName: CodeMetrics-Lambda 
+      Description: > 
+        Lambda para processamento das api da pipeline 
+      Code: 
+        S3Bucket: !Ref S3Bucket 
+        S3Key: !Ref CodeS3Name 
+      Handler: lambda.lambda_handler 
+      MemorySize: 128 
+      Role: !Sub ${LambdaExecutionRole.Arn} 
+      Runtime: python3.7 
+ 

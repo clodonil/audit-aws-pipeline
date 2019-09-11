@@ -177,6 +177,7 @@ class CodeMetricsLambda:
                       'action_faild':{},
                       'deploy_day':[],
                       'runtime' : 'Null',
+                      'type':'Null'
                       'pipe_version': 'Null',
                       'time_deploy': '0'
                     }

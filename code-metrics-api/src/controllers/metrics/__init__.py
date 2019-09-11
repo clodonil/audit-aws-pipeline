@@ -1,5 +1,5 @@
 from flask import request, Blueprint, Response 
-from app.dynamopipeline import pipelineMetrics 
+from src.dynamopipeline import pipelineMetrics 
 from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry,generate_latest, Info
 import prometheus_client 
  
