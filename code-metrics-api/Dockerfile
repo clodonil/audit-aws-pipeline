@@ -9,4 +9,4 @@ EXPOSE 8080
 COPY . /src
 WORKDIR /src
 RUN pip install -r requirements
-CMD ["./start.sh"]
+CMD ["/bin/bash","start.sh"]

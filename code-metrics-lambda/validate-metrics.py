@@ -16,14 +16,38 @@ def getpipelines():
 
 def falha_estrutura(met):
 
+    # Verifica o total de execucao com o total x sucesso e falhas
     failure = False
     if len(met['running']) != (int(met['sum_faild']) + int(met['sum_success']))  : failure = True
+    
+    # Total de Deploy tem que ser menor que o numero de execucao
+    total_deploy = 0
+    for  days in met["deploy_day"]:
+      for day in days:
+          total_deploy += int(days[day])
 
-    if failure:
-        print(json.dumps(met, indent=4, sort_keys=True))
+    if len(met['running']) < total_deploy  : failure = True
+    
+    # Total de deploy tem que ser igual ao numero de sucesso
+    if total_deploy != int(met['sum_success']) : failure = True
+    
+    action_falha = 0
+    for action in met['action_faild']:
+        action_falha += int(met['action_faild'][action])
+        
+    stage_falha = 0
+    for stage in met['stage_faild']:
+        stage_falha += int(met['stage_faild'][stage])
+    
+    # Total de falhar em action tem que ser no stage
+    if stage_falha != action_falha :  failure = True
+    
 
-
+    return failure
 
 metricas = getpipelines()
 for metrica in metricas:
-    falha_estrutura(metrica['detail'])
+    if falha_estrutura(metrica['detail']):
+        print(metrica['resource_id'])
+    
+print("FIM")

@@ -3,7 +3,11 @@ import boto3
 def dynamodb_query(table,region):
     dydb = boto3.resource('dynamodb',region_name=region)
     table = dydb.Table(table)
-    dyretorno  = table.scan()
+    dyretorno = {}
+    try:
+      dyretorno = table.scan()
+    except:
+      print("botocore.exceptions.NoCredentialsError: Unable to locate credentials")
 
     if "Items" in dyretorno:
         return dyretorno['Items']
